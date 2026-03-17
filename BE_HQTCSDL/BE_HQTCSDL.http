@@ -1,0 +1,6 @@
+@BE_HQTCSDL_HostAddress = http://localhost:5079
+
+GET {{BE_HQTCSDL_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
