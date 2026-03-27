@@ -1,7 +1,7 @@
 using BE_HQTCSDL.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace BE_HQTCSDL.Data
+namespace BE_HQTCSDL.Database
 {
     public class ApplicationDbContext : DbContext
     {
@@ -17,11 +17,8 @@ namespace BE_HQTCSDL.Data
         public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();
         public DbSet<Product> Products => Set<Product>();
         public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
-        public DbSet<ProductPromotion> ProductPromotions => Set<ProductPromotion>();
-        public DbSet<Promotion> Promotions => Set<Promotion>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<Review> Reviews => Set<Review>();
-        public DbSet<SealedProduct> SealedProducts => Set<SealedProduct>();
         public DbSet<TcgCard> TcgCards => Set<TcgCard>();
         public DbSet<TcgSet> TcgSets => Set<TcgSet>();
         public DbSet<User> Users => Set<User>();

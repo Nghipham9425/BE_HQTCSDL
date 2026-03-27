@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using BE_HQTCSDL.Data;
+using BE_HQTCSDL.Database;
 using BE_HQTCSDL.Dtos;
+using BE_HQTCSDL.Models;
 using BE_HQTCSDL.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,7 +23,6 @@ namespace BE_HQTCSDL.Repositories
 			var query = _db.TcgCards
 				.AsNoTracking()
 				.Include(c => c.Set)
-				.Where(c => !c.IsDeleted)
 				.AsQueryable();
 
 			if (!string.IsNullOrWhiteSpace(setId))
@@ -73,7 +73,7 @@ namespace BE_HQTCSDL.Repositories
 			return await _db.TcgCards
 				.AsNoTracking()
 				.Include(c => c.Set)
-				.Where(c => c.CardId == cardId && !c.IsDeleted)
+				.Where(c => c.CardId == cardId)
 				.Select(c => new TcgCardDetailDto
 				{
 					CardId = c.CardId,
@@ -95,7 +95,7 @@ namespace BE_HQTCSDL.Repositories
 			return await _db.TcgCards
 				.AsNoTracking()
 				.Include(c => c.Set)
-				.Where(c => c.SetId == setId && !c.IsDeleted)
+				.Where(c => c.SetId == setId)
 				.OrderBy(c => c.CardNumber)
 				.Select(c => new TcgCardListItemDto
 				{
@@ -121,8 +121,7 @@ namespace BE_HQTCSDL.Repositories
 				CardNumber = dto.CardNumber,
 				Rarity = dto.Rarity,
 				ImageSmall = dto.ImageSmall,
-				ImageLarge = dto.ImageLarge,
-				IsDeleted = false
+				ImageLarge = dto.ImageLarge
 			};
 
 			_db.TcgCards.Add(card);
@@ -133,7 +132,7 @@ namespace BE_HQTCSDL.Repositories
 
 		public async Task<TcgCardDetailDto?> UpdateAsync(string cardId, TcgCardUpsertDto dto)
 		{
-			var card = await _db.TcgCards.FirstOrDefaultAsync(c => c.CardId == cardId && !c.IsDeleted);
+			var card = await _db.TcgCards.FirstOrDefaultAsync(c => c.CardId == cardId);
 			if (card == null) return null;
 
 			card.SetId = dto.SetId;
@@ -150,10 +149,10 @@ namespace BE_HQTCSDL.Repositories
 
 		public async Task<bool> DeleteAsync(string cardId)
 		{
-			var card = await _db.TcgCards.FirstOrDefaultAsync(c => c.CardId == cardId && !c.IsDeleted);
+			var card = await _db.TcgCards.FirstOrDefaultAsync(c => c.CardId == cardId);
 			if (card == null) return false;
 
-			card.IsDeleted = true;
+			_db.TcgCards.Remove(card);
 			await _db.SaveChangesAsync();
 			return true;
 		}

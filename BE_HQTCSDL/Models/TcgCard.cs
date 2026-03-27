@@ -38,9 +38,6 @@ namespace BE_HQTCSDL.Models
         [MaxLength(500)]
         public string? ImageLarge { get; set; }
 
-        [Column("IS_DELETED")]
-        public bool IsDeleted { get; set; } = false;
-
         // Navigation
         [ForeignKey("SetId")]
         public TcgSet Set { get; set; } = null!;

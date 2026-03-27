@@ -23,7 +23,7 @@ namespace BE_HQTCSDL.Models
         [Column("PRODUCT_TYPE")]
         [MaxLength(20)]
         public string ProductType { get; set; } = "NORMAL";
-        // NORMAL | TCG_CARD | SEALED | CONSOLE | ACCESSORY
+        // NORMAL | TCG_CARD | CONSOLE | ACCESSORY
 
         [Column("PRICE")]
         public long? Price { get; set; }
@@ -65,11 +65,9 @@ namespace BE_HQTCSDL.Models
         [ForeignKey("CardId")]
         public TcgCard? Card { get; set; }
 
-        public SealedProduct? SealedProduct { get; set; }
         public ICollection<ProductCategory> ProductCategories { get; set; } = [];
         public ICollection<OrderDetail> OrderDetails { get; set; } = [];
         public ICollection<Review> Reviews { get; set; } = [];
         public ICollection<Wishlist> Wishlists { get; set; } = [];
-        public ICollection<ProductPromotion> ProductPromotions { get; set; } = [];
     }
 }

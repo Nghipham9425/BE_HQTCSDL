@@ -1,8 +1,7 @@
 using BE_HQTCSDL.Repositories.Interfaces;
 using BE_HQTCSDL.Services.Interfaces;
 using BE_HQTCSDL.Dtos;
-using BE_HQTCSDL.Data;
-using Microsoft.EntityFrameworkCore;
+using BE_HQTCSDL.Database;
 using Microsoft.EntityFrameworkCore;
 
 namespace BE_HQTCSDL.Services
@@ -40,11 +39,11 @@ namespace BE_HQTCSDL.Services
             if (string.IsNullOrWhiteSpace(dto.CardNumber)) throw new ArgumentException("CardNumber is required");
 
             // Check if Set exists
-            var setExists = await _db.TcgSets.AnyAsync(s => s.SetId == dto.SetId);
+            var setExists = await _db.TcgSets.CountAsync(s => s.SetId == dto.SetId) > 0;
             if (!setExists) throw new ArgumentException("Invalid SetId");
 
             // Check CardId unique
-            var cardExists = await _db.TcgCards.AnyAsync(c => c.CardId == dto.CardId);
+            var cardExists = await _db.TcgCards.CountAsync(c => c.CardId == dto.CardId) > 0;
             if (cardExists) throw new ArgumentException("CardId already exists");
 
             return await _repo.CreateAsync(dto);
@@ -58,7 +57,7 @@ namespace BE_HQTCSDL.Services
             if (string.IsNullOrWhiteSpace(dto.CardNumber)) throw new ArgumentException("CardNumber is required");
 
             // Check if Set exists
-            var setExists = await _db.TcgSets.AnyAsync(s => s.SetId == dto.SetId);
+            var setExists = await _db.TcgSets.CountAsync(s => s.SetId == dto.SetId) > 0;
             if (!setExists) throw new ArgumentException("Invalid SetId");
 
             return await _repo.UpdateAsync(cardId, dto);
