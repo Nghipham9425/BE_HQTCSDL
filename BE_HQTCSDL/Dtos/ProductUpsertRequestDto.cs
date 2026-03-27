@@ -16,8 +16,6 @@ namespace BE_HQTCSDL.Dtos
         public int Stock { get; set; }
         public bool IsActive { get; set; } = true;
         public string? CardId { get; set; }
-        public string? SealedSetId { get; set; }
-        public string? PackType { get; set; }
         public List<long> CategoryIds { get; set; } = new();
     }
 }

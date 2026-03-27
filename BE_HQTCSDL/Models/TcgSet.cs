@@ -32,6 +32,5 @@ namespace BE_HQTCSDL.Models
 
         // Navigation
         public ICollection<TcgCard> Cards { get; set; } = [];
-        public ICollection<SealedProduct> SealedProducts { get; set; } = [];
     }
 }
