@@ -79,7 +79,7 @@ namespace BE_HQTCSDL.Repositories
                     Name = p.Name,
                     ProductType = p.ProductType,
                     Price = p.Price,
-                    Stock = p.Stock,
+                    Stock = p.Inventory != null ? p.Inventory.Quantity : 0,
                     IsActiveValue = p.IsActive,
                     Thumbnail = p.Thumbnail,
                     UpdatedAt = p.UpdatedAt
@@ -113,6 +113,7 @@ namespace BE_HQTCSDL.Repositories
             var row = await _db.Products
                 .AsNoTracking()
                 .Include(p => p.ProductCategories)
+                .Include(p => p.Inventory)
                 .Where(p => p.Id == id)
                 .Select(p => new
                 {
@@ -126,7 +127,8 @@ namespace BE_HQTCSDL.Repositories
                     Descriptions = p.Descriptions,
                     Thumbnail = p.Thumbnail,
                     Image = p.Image,
-                    Stock = p.Stock,
+                    Stock = p.Inventory != null ? p.Inventory.Quantity : 0,
+                    ReservedStock = p.Inventory != null ? p.Inventory.ReservedQuantity : 0,
                     IsActiveValue = p.IsActive,
                     CardId = p.CardId,
                     CategoryIds = p.ProductCategories.Select(pc => pc.CategoryId).ToList(),
@@ -150,6 +152,8 @@ namespace BE_HQTCSDL.Repositories
                 Thumbnail = row.Thumbnail,
                 Image = row.Image,
                 Stock = row.Stock,
+                ReservedStock = row.ReservedStock,
+                AvailableStock = row.Stock - row.ReservedStock,
                 IsActive = row.IsActiveValue == 1,
                 CardId = row.CardId,
                 CategoryIds = row.CategoryIds,
@@ -172,7 +176,6 @@ namespace BE_HQTCSDL.Repositories
                 Descriptions = dto.Descriptions,
                 Thumbnail = dto.Thumbnail,
                 Image = dto.Image,
-                Stock = dto.Stock,
                 IsActive = dto.IsActive ? 1 : 0,
                 CardId = dto.CardId,
                 CreateDate = now,
@@ -181,6 +184,17 @@ namespace BE_HQTCSDL.Repositories
 
             _db.Products.Add(product);
             await _db.SaveChangesAsync();
+
+            // Create inventory record
+            var inventory = new Inventory
+            {
+                ProductId = product.Id,
+                Quantity = dto.Stock,
+                ReservedQuantity = 0,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            _db.Inventories.Add(inventory);
 
             if (dto.CategoryIds.Count > 0)
             {
@@ -204,9 +218,12 @@ namespace BE_HQTCSDL.Repositories
         {
             var product = await _db.Products
                 .Include(p => p.ProductCategories)
+                .Include(p => p.Inventory)
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (product == null) return null;
+
+            var now = DateTime.Now;
 
             product.Sku = dto.Sku.Trim();
             product.Name = dto.Name.Trim();
@@ -217,10 +234,28 @@ namespace BE_HQTCSDL.Repositories
             product.Descriptions = dto.Descriptions;
             product.Thumbnail = dto.Thumbnail;
             product.Image = dto.Image;
-            product.Stock = dto.Stock;
             product.IsActive = dto.IsActive ? 1 : 0;
             product.CardId = dto.CardId;
-            product.UpdatedAt = DateTime.Now;
+            product.UpdatedAt = now;
+
+            // Update inventory
+            if (product.Inventory != null)
+            {
+                product.Inventory.Quantity = dto.Stock;
+                product.Inventory.UpdatedAt = now;
+            }
+            else
+            {
+                var inventory = new Inventory
+                {
+                    ProductId = product.Id,
+                    Quantity = dto.Stock,
+                    ReservedQuantity = 0,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                _db.Inventories.Add(inventory);
+            }
 
             _db.ProductCategories.RemoveRange(product.ProductCategories);
 

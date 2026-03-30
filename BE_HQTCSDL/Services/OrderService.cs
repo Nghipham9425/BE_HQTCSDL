@@ -50,7 +50,6 @@ namespace BE_HQTCSDL.Services
             if (customer == null) throw new ArgumentException("Customer not found");
 
             customer.Phone = dto.PhoneNumber;
-            customer.DefaultShippingAddress = dto.ShippingAddress;
             if (string.IsNullOrWhiteSpace(dto.OrderEmail))
             {
                 dto.OrderEmail = customer.Email;
@@ -87,12 +86,19 @@ namespace BE_HQTCSDL.Services
 
                 if (product.IsActive != 1) throw new ArgumentException($"Product {product.Id} is inactive");
                 if (!product.Price.HasValue) throw new ArgumentException($"Product {product.Id} has no price");
-                if (product.Stock < line.Quantity) throw new ArgumentException($"Product {product.Id} does not have enough stock");
+
+                var inventory = product.Inventory;
+                var availableStock = inventory != null ? (inventory.Quantity - inventory.ReservedQuantity) : 0;
+                if (availableStock < line.Quantity) throw new ArgumentException($"Product {product.Id} does not have enough stock");
 
                 var unitPrice = product.Price.Value;
                 subTotal += unitPrice * line.Quantity;
 
-                product.Stock -= line.Quantity;
+                if (inventory != null)
+                {
+                    inventory.Quantity -= line.Quantity;
+                    inventory.UpdatedAt = DateTime.Now;
+                }
                 product.UpdatedAt = DateTime.Now;
 
                 details.Add(new OrderDetail

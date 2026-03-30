@@ -52,6 +52,7 @@ namespace BE_HQTCSDL.Repositories
         public Task<List<Product>> GetProductsByIdsForUpdateAsync(List<long> productIds)
         {
             return _db.Products
+                .Include(p => p.Inventory)
                 .Where(p => productIds.Contains(p.Id))
                 .ToListAsync();
         }

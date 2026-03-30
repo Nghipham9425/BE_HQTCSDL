@@ -22,8 +22,10 @@ namespace BE_HQTCSDL.Database
         public DbSet<TcgCard> TcgCards => Set<TcgCard>();
         public DbSet<TcgSet> TcgSets => Set<TcgSet>();
         public DbSet<User> Users => Set<User>();
+        public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
         public DbSet<Voucher> Vouchers => Set<Voucher>();
         public DbSet<Wishlist> Wishlists => Set<Wishlist>();
+        public DbSet<Inventory> Inventories => Set<Inventory>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -40,6 +42,13 @@ namespace BE_HQTCSDL.Database
             modelBuilder.Entity<Review>()
                 .HasIndex(x => new { x.UserId, x.ProductId, x.OrderId })
                 .IsUnique();
+
+            modelBuilder.Entity<Inventory>()
+                .HasIndex(x => x.ProductId)
+                .IsUnique();
+
+            modelBuilder.Entity<UserAddress>()
+                .HasIndex(x => x.UserId);
         }
     }
 }

@@ -25,10 +25,6 @@ namespace BE_HQTCSDL.Models
         [MaxLength(150)]
         public string FullName { get; set; } = string.Empty;
 
-        [Column("DEFAULT_SHIPPING_ADDRESS")]
-        [MaxLength(300)]
-        public string? DefaultShippingAddress { get; set; }
-
         [Column("COUNTRY")]
         [MaxLength(100)]
         public string? Country { get; set; }
@@ -50,5 +46,6 @@ namespace BE_HQTCSDL.Models
         public ICollection<Order> Orders { get; set; } = [];
         public ICollection<Review> Reviews { get; set; } = [];
         public ICollection<Wishlist> Wishlists { get; set; } = [];
+        public ICollection<UserAddress> Addresses { get; set; } = [];
     }
 }

@@ -15,7 +15,9 @@ namespace BE_HQTCSDL.Dtos
         public string? Descriptions { get; set; }
         public string? Thumbnail { get; set; }
         public string? Image { get; set; }
-        public int Stock { get; set; }
+        public int Stock { get; set; } // From Inventory table
+        public int ReservedStock { get; set; } // From Inventory table
+        public int AvailableStock { get; set; } // Computed: Stock - ReservedStock
         public bool IsActive { get; set; }
         public string? CardId { get; set; }
         public List<long> CategoryIds { get; set; } = new();
