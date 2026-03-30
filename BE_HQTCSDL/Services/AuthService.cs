@@ -139,18 +139,9 @@ namespace BE_HQTCSDL.Services
 			var country = string.IsNullOrWhiteSpace(dto.Country) ? null : dto.Country.Trim();
 			if (country != null && country.Length > 100) throw new ArgumentException("Country too long");
 
-			var defaultShippingAddress = string.IsNullOrWhiteSpace(dto.DefaultShippingAddress)
-				? null
-				: dto.DefaultShippingAddress.Trim();
-			if (defaultShippingAddress != null && defaultShippingAddress.Length > 300)
-			{
-				throw new ArgumentException("DefaultShippingAddress too long");
-			}
-
 			user.FullName = fullName;
 			user.Phone = phone;
 			user.Country = country;
-			user.DefaultShippingAddress = defaultShippingAddress;
 
 			await _repo.SaveChangesAsync();
 
@@ -219,7 +210,6 @@ namespace BE_HQTCSDL.Services
 				FullName = user.FullName,
 				Phone = user.Phone,
 				Country = user.Country,
-				DefaultShippingAddress = user.DefaultShippingAddress,
 				Role = user.Role
 			};
 		}

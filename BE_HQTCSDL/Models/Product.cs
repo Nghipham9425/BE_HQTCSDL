@@ -51,9 +51,6 @@ namespace BE_HQTCSDL.Models
         [Column("UPDATED_AT")]
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
-        [Column("STOCK")]
-        public int Stock { get; set; } = 0;
-
         [Column("IS_ACTIVE")]
         public int IsActive { get; set; } = 1;
 
@@ -65,6 +62,7 @@ namespace BE_HQTCSDL.Models
         [ForeignKey("CardId")]
         public TcgCard? Card { get; set; }
 
+        public Inventory? Inventory { get; set; }
         public ICollection<ProductCategory> ProductCategories { get; set; } = [];
         public ICollection<OrderDetail> OrderDetails { get; set; } = [];
         public ICollection<Review> Reviews { get; set; } = [];

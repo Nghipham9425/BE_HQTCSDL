@@ -13,7 +13,7 @@ namespace BE_HQTCSDL.Dtos
         public string? Descriptions { get; set; }
         public string? Thumbnail { get; set; }
         public string? Image { get; set; }
-        public int Stock { get; set; }
+        public int Stock { get; set; } // Will be saved to Inventory table
         public bool IsActive { get; set; } = true;
         public string? CardId { get; set; }
         public List<long> CategoryIds { get; set; } = new();
