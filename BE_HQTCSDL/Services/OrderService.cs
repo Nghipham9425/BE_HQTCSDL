@@ -94,12 +94,12 @@ namespace BE_HQTCSDL.Services
                 var unitPrice = product.Price.Value;
                 subTotal += unitPrice * line.Quantity;
 
+                // Reserve the quantity instead of deducting directly
+                // Quantity will be deducted when order status changes to DONE
                 if (inventory != null)
                 {
-                    inventory.Quantity -= line.Quantity;
-                    inventory.UpdatedAt = DateTime.Now;
+                    inventory.ReservedQuantity += line.Quantity;
                 }
-                product.UpdatedAt = DateTime.Now;
 
                 details.Add(new OrderDetail
                 {

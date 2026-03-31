@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Database;
 using BE_HQTCSDL.Models;
 using BE_HQTCSDL.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Oracle.ManagedDataAccess.Client;
+using Oracle.ManagedDataAccess.Types;
 
 namespace BE_HQTCSDL.Repositories
 {
@@ -165,12 +168,46 @@ namespace BE_HQTCSDL.Repositories
 
         public async Task<bool> UpdateOrderStatusAsync(long orderId, string status)
         {
-            var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
-            if (order == null) return false;
+            // Use stored procedure SP_UPDATE_ORDER_STATUS
+            // This handles: validation, inventory restoration on cancel, payment update on done
+            var connection = _db.Database.GetDbConnection();
+            await connection.OpenAsync();
+            
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SP_UPDATE_ORDER_STATUS";
+                command.CommandType = CommandType.StoredProcedure;
 
-            order.OrderStatus = status;
-            await _db.SaveChangesAsync();
-            return true;
+                var pOrderId = new OracleParameter("p_order_id", OracleDbType.Int64) { Value = orderId };
+                var pNewStatus = new OracleParameter("p_new_status", OracleDbType.Varchar2, 20) { Value = status };
+                var pSuccess = new OracleParameter("p_success", OracleDbType.Int32) { Direction = ParameterDirection.Output };
+                var pErrorMessage = new OracleParameter("p_error_message", OracleDbType.Varchar2, 500) { Direction = ParameterDirection.Output };
+
+                command.Parameters.Add(pOrderId);
+                command.Parameters.Add(pNewStatus);
+                command.Parameters.Add(pSuccess);
+                command.Parameters.Add(pErrorMessage);
+
+                await command.ExecuteNonQueryAsync();
+
+                var successValue = (OracleDecimal)pSuccess.Value;
+                var success = successValue.IsNull ? 0 : successValue.ToInt32();
+                if (success != 1)
+                {
+                    var errorValue = pErrorMessage.Value;
+                    var errorMsg = errorValue is OracleString oracleStr && !oracleStr.IsNull 
+                        ? oracleStr.Value 
+                        : "Update order status failed";
+                    throw new InvalidOperationException(errorMsg);
+                }
+
+                return true;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
         }
     }
 }

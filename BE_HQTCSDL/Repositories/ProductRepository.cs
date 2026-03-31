@@ -164,7 +164,6 @@ namespace BE_HQTCSDL.Repositories
 
         public async Task<ProductDetailDto> CreateAsync(ProductUpsertRequestDto dto)
         {
-            var now = DateTime.Now;
             var product = new Product
             {
                 Sku = dto.Sku.Trim(),
@@ -177,24 +176,20 @@ namespace BE_HQTCSDL.Repositories
                 Thumbnail = dto.Thumbnail,
                 Image = dto.Image,
                 IsActive = dto.IsActive ? 1 : 0,
-                CardId = dto.CardId,
-                CreateDate = now,
-                UpdatedAt = now
+                CardId = dto.CardId
             };
 
             _db.Products.Add(product);
             await _db.SaveChangesAsync();
 
-            // Create inventory record
-            var inventory = new Inventory
+            // Trigger TRG_PRODUCTS_CREATE_INVENTORY auto-creates inventory with QUANTITY=0
+            // Update the quantity using raw SQL to avoid EF tracking issues
+            if (dto.Stock > 0)
             {
-                ProductId = product.Id,
-                Quantity = dto.Stock,
-                ReservedQuantity = 0,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-            _db.Inventories.Add(inventory);
+                await _db.Database.ExecuteSqlRawAsync(
+                    "UPDATE \"INVENTORY\" SET \"QUANTITY\" = {0} WHERE \"PRODUCT_ID\" = {1}",
+                    dto.Stock, product.Id);
+            }
 
             if (dto.CategoryIds.Count > 0)
             {
@@ -207,9 +202,8 @@ namespace BE_HQTCSDL.Repositories
                     });
 
                 _db.ProductCategories.AddRange(categoryRows);
+                await _db.SaveChangesAsync();
             }
-
-            await _db.SaveChangesAsync();
 
             return await GetByIdAsync(product.Id) ?? throw new InvalidOperationException("Failed to create product");
         }
@@ -223,8 +217,6 @@ namespace BE_HQTCSDL.Repositories
 
             if (product == null) return null;
 
-            var now = DateTime.Now;
-
             product.Sku = dto.Sku.Trim();
             product.Name = dto.Name.Trim();
             product.ProductType = dto.ProductType;
@@ -236,23 +228,21 @@ namespace BE_HQTCSDL.Repositories
             product.Image = dto.Image;
             product.IsActive = dto.IsActive ? 1 : 0;
             product.CardId = dto.CardId;
-            product.UpdatedAt = now;
+            // UpdatedAt is auto-set by TRG_PRODUCTS_UPDATED_AT trigger
 
-            // Update inventory
+            // Update inventory (trigger auto-sets UPDATED_AT)
             if (product.Inventory != null)
             {
                 product.Inventory.Quantity = dto.Stock;
-                product.Inventory.UpdatedAt = now;
             }
             else
             {
+                // Fallback for old products without inventory
                 var inventory = new Inventory
                 {
                     ProductId = product.Id,
                     Quantity = dto.Stock,
-                    ReservedQuantity = 0,
-                    CreatedAt = now,
-                    UpdatedAt = now
+                    ReservedQuantity = 0
                 };
                 _db.Inventories.Add(inventory);
             }
@@ -282,7 +272,7 @@ namespace BE_HQTCSDL.Repositories
             if (product == null) return false;
 
             product.IsActive = 0;
-            product.UpdatedAt = DateTime.Now;
+            // UpdatedAt is auto-set by TRG_PRODUCTS_UPDATED_AT trigger
             await _db.SaveChangesAsync();
             return true;
         }
