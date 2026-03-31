@@ -50,11 +50,11 @@ namespace BE_HQTCSDL.Repositories
 
         public async Task<UserAddressDto> CreateAsync(long userId, UserAddressUpsertDto dto)
         {
-            var now = DateTime.Now;
-
+            // Clear default before inserting to avoid trigger conflict
             if (dto.IsDefault)
             {
                 await ClearDefaultAsync(userId);
+                await _db.SaveChangesAsync();
             }
 
             var address = new UserAddress
@@ -69,14 +69,15 @@ namespace BE_HQTCSDL.Repositories
                 PostalCode = dto.PostalCode?.Trim(),
                 Country = dto.Country?.Trim() ?? "Vietnam",
                 Phone = dto.Phone?.Trim(),
-                IsDefault = dto.IsDefault ? 1 : 0,
-                CreatedAt = now,
-                UpdatedAt = now
+                IsDefault = dto.IsDefault ? 1 : 0
+                // CreatedAt/UpdatedAt are auto-set by database DEFAULT and trigger
             };
 
             _db.UserAddresses.Add(address);
             await _db.SaveChangesAsync();
 
+            // Reload to get database-generated values
+            await _db.Entry(address).ReloadAsync();
             return MapToDto(address);
         }
 
@@ -87,9 +88,11 @@ namespace BE_HQTCSDL.Repositories
 
             if (address == null) return null;
 
+            // Clear default before updating to avoid trigger conflict
             if (dto.IsDefault && address.IsDefault != 1)
             {
                 await ClearDefaultAsync(userId);
+                await _db.SaveChangesAsync();
             }
 
             address.AddressName = dto.AddressName?.Trim();
@@ -102,10 +105,12 @@ namespace BE_HQTCSDL.Repositories
             address.Country = dto.Country?.Trim() ?? "Vietnam";
             address.Phone = dto.Phone?.Trim();
             address.IsDefault = dto.IsDefault ? 1 : 0;
-            address.UpdatedAt = DateTime.Now;
+            // UpdatedAt is auto-set by TRG_USER_ADDRESSES_UPDATED_AT trigger
 
             await _db.SaveChangesAsync();
 
+            // Reload to get trigger-updated values
+            await _db.Entry(address).ReloadAsync();
             return MapToDto(address);
         }
 
@@ -129,10 +134,12 @@ namespace BE_HQTCSDL.Repositories
 
             if (address == null) return false;
 
+            // Clear other defaults before setting new one to avoid trigger conflict
             await ClearDefaultAsync(userId);
+            await _db.SaveChangesAsync();
 
             address.IsDefault = 1;
-            address.UpdatedAt = DateTime.Now;
+            // UpdatedAt is auto-set by TRG_USER_ADDRESSES_UPDATED_AT trigger
             await _db.SaveChangesAsync();
 
             return true;

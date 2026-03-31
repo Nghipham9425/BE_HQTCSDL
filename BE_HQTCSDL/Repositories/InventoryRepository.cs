@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Database;
@@ -6,6 +7,8 @@ using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Models;
 using BE_HQTCSDL.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Oracle.ManagedDataAccess.Client;
+using Oracle.ManagedDataAccess.Types;
 
 namespace BE_HQTCSDL.Repositories
 {
@@ -85,14 +88,25 @@ namespace BE_HQTCSDL.Repositories
 
         public async Task<InventoryDto> CreateAsync(long productId, int quantity)
         {
-            var now = DateTime.Now;
+            // Check if inventory already exists (trigger may have created it)
+            var existing = await _db.Inventories
+                .Include(i => i.Product)
+                .FirstOrDefaultAsync(i => i.ProductId == productId);
+
+            if (existing != null)
+            {
+                // Update existing inventory instead of creating new
+                existing.Quantity = quantity;
+                await _db.SaveChangesAsync();
+                return MapToDto(existing);
+            }
+
+            // Create new inventory if not exists
             var inventory = new Inventory
             {
                 ProductId = productId,
                 Quantity = quantity,
-                ReservedQuantity = 0,
-                CreatedAt = now,
-                UpdatedAt = now
+                ReservedQuantity = 0
             };
 
             _db.Inventories.Add(inventory);
@@ -121,17 +135,46 @@ namespace BE_HQTCSDL.Repositories
 
         public async Task<bool> AdjustQuantityAsync(long productId, int adjustment)
         {
-            var inventory = await _db.Inventories
-                .FirstOrDefaultAsync(i => i.ProductId == productId);
+            // Use stored procedure SP_ADJUST_INVENTORY
+            // This handles: locking, validation, prevents negative quantity
+            var connection = _db.Database.GetDbConnection();
+            await connection.OpenAsync();
+            
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = "SP_ADJUST_INVENTORY";
+                command.CommandType = CommandType.StoredProcedure;
 
-            if (inventory == null) return false;
+                var pProductId = new OracleParameter("p_product_id", OracleDbType.Int64) { Value = productId };
+                var pAdjustment = new OracleParameter("p_adjustment", OracleDbType.Int32) { Value = adjustment };
+                var pSuccess = new OracleParameter("p_success", OracleDbType.Int32) { Direction = ParameterDirection.Output };
+                var pErrorMessage = new OracleParameter("p_error_message", OracleDbType.Varchar2, 500) { Direction = ParameterDirection.Output };
 
-            inventory.Quantity += adjustment;
-            if (inventory.Quantity < 0) inventory.Quantity = 0;
-            inventory.UpdatedAt = DateTime.Now;
+                command.Parameters.Add(pProductId);
+                command.Parameters.Add(pAdjustment);
+                command.Parameters.Add(pSuccess);
+                command.Parameters.Add(pErrorMessage);
 
-            await _db.SaveChangesAsync();
-            return true;
+                await command.ExecuteNonQueryAsync();
+
+                var successValue = (OracleDecimal)pSuccess.Value;
+                var success = successValue.IsNull ? 0 : successValue.ToInt32();
+                if (success != 1)
+                {
+                    var errorValue = pErrorMessage.Value;
+                    var errorMsg = errorValue is OracleString oracleStr && !oracleStr.IsNull 
+                        ? oracleStr.Value 
+                        : "Adjust inventory failed";
+                    throw new InvalidOperationException(errorMsg);
+                }
+
+                return true;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
         }
 
         public async Task<bool> ReserveAsync(long productId, int quantity)
