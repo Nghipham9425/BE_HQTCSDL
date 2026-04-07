@@ -11,6 +11,16 @@ namespace BE_HQTCSDL.Repositories
 {
     public class OrderRepository : IOrderRepository
     {
+        private static readonly Dictionary<string, HashSet<string>> AllowedStatusTransitions =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PENDING"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PENDING", "CONFIRMED", "CANCELLED" },
+                ["CONFIRMED"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "CONFIRMED", "SHIPPED" },
+                ["SHIPPED"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "SHIPPED", "DONE" },
+                ["DONE"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "DONE" },
+                ["CANCELLED"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "CANCELLED" }
+            };
+
         private readonly ApplicationDbContext _db;
 
         public OrderRepository(ApplicationDbContext db)
@@ -237,6 +247,16 @@ namespace BE_HQTCSDL.Repositories
 
                 var currentStatus = (order.OrderStatus ?? string.Empty).Trim().ToUpperInvariant();
                 var newStatus = (status ?? string.Empty).Trim().ToUpperInvariant();
+
+                if (!AllowedStatusTransitions.TryGetValue(currentStatus, out var allowedNextStatuses))
+                {
+                    throw new InvalidOperationException("Unsupported current order status");
+                }
+
+                if (!allowedNextStatuses.Contains(newStatus))
+                {
+                    throw new InvalidOperationException($"Cannot change order status from {currentStatus} to {newStatus}");
+                }
 
                 if (currentStatus is "DONE" or "CANCELLED")
                 {
