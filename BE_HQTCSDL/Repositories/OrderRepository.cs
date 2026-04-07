@@ -1,14 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Database;
 using BE_HQTCSDL.Models;
 using BE_HQTCSDL.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using Oracle.ManagedDataAccess.Client;
-using Oracle.ManagedDataAccess.Types;
 
 namespace BE_HQTCSDL.Repositories
 {
@@ -116,6 +113,64 @@ namespace BE_HQTCSDL.Repositories
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<bool> CancelOrderByCustomerAsync(long customerId, long orderId)
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var order = await _db.Orders
+                    .Include(o => o.OrderDetails)
+                    .Include(o => o.Payments)
+                    .FirstOrDefaultAsync(o => o.Id == orderId && o.CustomerId == customerId);
+
+                if (order == null)
+                {
+                    return false;
+                }
+
+                var currentStatus = (order.OrderStatus ?? string.Empty).Trim().ToUpperInvariant();
+                if (currentStatus != "PENDING")
+                {
+                    throw new InvalidOperationException("Chỉ được hủy đơn khi đơn đang chờ xác nhận");
+                }
+
+                var hasSuccessfulPayment = order.Payments.Any(p =>
+                    string.Equals(p.Status, "SUCCESS", StringComparison.OrdinalIgnoreCase));
+                if (hasSuccessfulPayment)
+                {
+                    throw new InvalidOperationException("Đơn đã thanh toán thành công, không thể hủy");
+                }
+
+                var groupedDetails = order.OrderDetails
+                    .GroupBy(d => d.ProductId)
+                    .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                    .ToList();
+
+                foreach (var detail in groupedDetails)
+                {
+                    var inventory = await _db.Inventories
+                        .FirstOrDefaultAsync(i => i.ProductId == detail.ProductId);
+
+                    if (inventory != null)
+                    {
+                        inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - detail.Quantity);
+                        inventory.UpdatedAt = DateTime.Now;
+                    }
+                }
+
+                order.OrderStatus = "CANCELLED";
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
         public async Task<(int Total, List<Order> Items)> GetOrdersPagedForAdminAsync(string? q, string? status, int page, int pageSize)
         {
             var query = _db.Orders
@@ -168,45 +223,139 @@ namespace BE_HQTCSDL.Repositories
 
         public async Task<bool> UpdateOrderStatusAsync(long orderId, string status)
         {
-            // Use stored procedure SP_UPDATE_ORDER_STATUS
-            // This handles: validation, inventory restoration on cancel, payment update on done
-            var connection = _db.Database.GetDbConnection();
-            await connection.OpenAsync();
-            
+            await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                using var command = connection.CreateCommand();
-                command.CommandText = "SP_UPDATE_ORDER_STATUS";
-                command.CommandType = CommandType.StoredProcedure;
+                var order = await _db.Orders
+                    .Include(o => o.OrderDetails)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
 
-                var pOrderId = new OracleParameter("p_order_id", OracleDbType.Int64) { Value = orderId };
-                var pNewStatus = new OracleParameter("p_new_status", OracleDbType.Varchar2, 20) { Value = status };
-                var pSuccess = new OracleParameter("p_success", OracleDbType.Int32) { Direction = ParameterDirection.Output };
-                var pErrorMessage = new OracleParameter("p_error_message", OracleDbType.Varchar2, 500) { Direction = ParameterDirection.Output };
-
-                command.Parameters.Add(pOrderId);
-                command.Parameters.Add(pNewStatus);
-                command.Parameters.Add(pSuccess);
-                command.Parameters.Add(pErrorMessage);
-
-                await command.ExecuteNonQueryAsync();
-
-                var successValue = (OracleDecimal)pSuccess.Value;
-                var success = successValue.IsNull ? 0 : successValue.ToInt32();
-                if (success != 1)
+                if (order == null)
                 {
-                    var errorValue = pErrorMessage.Value;
-                    var errorMsg = errorValue is OracleString oracleStr && !oracleStr.IsNull 
-                        ? oracleStr.Value 
-                        : "Update order status failed";
-                    throw new InvalidOperationException(errorMsg);
+                    return false;
                 }
+
+                var currentStatus = (order.OrderStatus ?? string.Empty).Trim().ToUpperInvariant();
+                var newStatus = (status ?? string.Empty).Trim().ToUpperInvariant();
+
+                if (currentStatus is "DONE" or "CANCELLED")
+                {
+                    throw new InvalidOperationException("Cannot update completed/cancelled order");
+                }
+
+                if (newStatus == "CANCELLED")
+                {
+                    if (currentStatus != "PENDING")
+                    {
+                        throw new InvalidOperationException("Cannot cancel order after confirmation");
+                    }
+
+                    var groupedDetails = order.OrderDetails
+                        .GroupBy(d => d.ProductId)
+                        .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                        .ToList();
+
+                    foreach (var detail in groupedDetails)
+                    {
+                        var inventory = await _db.Inventories
+                            .FirstOrDefaultAsync(i => i.ProductId == detail.ProductId);
+
+                        if (inventory != null)
+                        {
+                            inventory.ReservedQuantity = Math.Max(0, inventory.ReservedQuantity - detail.Quantity);
+                            inventory.UpdatedAt = DateTime.Now;
+                        }
+                    }
+                }
+
+                order.OrderStatus = newStatus;
+
+                if (newStatus == "DONE")
+                {
+                    var payments = await _db.Payments
+                        .Where(p => p.OrderId == orderId)
+                        .ToListAsync();
+
+                    foreach (var payment in payments)
+                    {
+                        payment.Status = "SUCCESS";
+                        payment.PaidAt = DateTime.UtcNow;
+                    }
+                }
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
 
                 return true;
             }
-            finally
+            catch
             {
-                await connection.CloseAsync();
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<bool> ConfirmPaymentByOrderIdAsync(long orderId, long amount, string? transactionId, DateTime paidAtUtc)
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var order = await _db.Orders
+                    .Include(o => o.Payments)
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                if (order == null)
+                {
+                    return false;
+                }
+
+                if (string.Equals(order.OrderStatus, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                var successfulPayment = order.Payments.FirstOrDefault(p =>
+                    string.Equals(p.Status, "SUCCESS", StringComparison.OrdinalIgnoreCase));
+
+                if (successfulPayment != null)
+                {
+                    await tx.CommitAsync();
+                    return true;
+                }
+
+                var payment = order.Payments.FirstOrDefault(p =>
+                    !string.Equals(p.Status, "SUCCESS", StringComparison.OrdinalIgnoreCase));
+
+                if (payment == null)
+                {
+                    return false;
+                }
+
+                if (amount > 0 && payment.Amount != amount)
+                {
+                    return false;
+                }
+
+                payment.Status = "SUCCESS";
+                payment.PaidAt = paidAtUtc;
+                if (!string.IsNullOrWhiteSpace(transactionId))
+                {
+                    payment.TransactionId = transactionId.Trim();
+                }
+
+                if (string.Equals(order.OrderStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                {
+                    order.OrderStatus = "CONFIRMED";
+                }
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
             }
         }
     }

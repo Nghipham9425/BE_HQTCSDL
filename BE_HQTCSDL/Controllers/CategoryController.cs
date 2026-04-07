@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -37,7 +38,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPost("categories")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Create([FromBody] CategoryUpsertRequestDto dto)
         {
             try
@@ -52,7 +53,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPut("categories/{id:long}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Update(long id, [FromBody] CategoryUpsertRequestDto dto)
         {
             try
@@ -68,7 +69,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpDelete("categories/{id:long}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Delete(long id)
         {
             var success = await _service.DeleteAsync(id);

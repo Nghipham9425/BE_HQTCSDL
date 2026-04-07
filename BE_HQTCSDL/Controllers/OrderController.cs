@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -32,6 +33,10 @@ namespace BE_HQTCSDL.Controllers
                 return Ok(result);
             }
             catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
@@ -73,7 +78,30 @@ namespace BE_HQTCSDL.Controllers
             }
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [HttpPost("me/{id:long}/cancel")]
+        public async Task<IActionResult> CancelMyOrder(long id)
+        {
+            try
+            {
+                var customerId = GetCurrentUserId();
+                if (customerId <= 0) return Unauthorized(new { message = "Unauthorized" });
+
+                var result = await _service.CancelMyOrderAsync(customerId, id);
+                if (result == null) return NotFound(new { message = "Order not found" });
+
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = AppRoles.AdminOrOrderManager)]
         [HttpGet("admin")]
         public async Task<IActionResult> GetAdminOrders(
             [FromQuery] string? q,
@@ -92,7 +120,7 @@ namespace BE_HQTCSDL.Controllers
             }
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrOrderManager)]
         [HttpGet("admin/{id:long}")]
         public async Task<IActionResult> GetAdminOrderById(long id)
         {
@@ -109,7 +137,7 @@ namespace BE_HQTCSDL.Controllers
             }
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrOrderManager)]
         [HttpPut("admin/{id:long}/status")]
         public async Task<IActionResult> UpdateOrderStatus(long id, [FromBody] OrderUpdateStatusDto dto)
         {
@@ -122,6 +150,10 @@ namespace BE_HQTCSDL.Controllers
                 return Ok(result);
             }
             catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }

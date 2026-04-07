@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -111,6 +112,52 @@ namespace BE_HQTCSDL.Controllers
                 if (profile == null) return NotFound(new { message = "User not found" });
 
                 return Ok(profile);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPut("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] AuthChangePasswordRequestDto dto)
+        {
+            try
+            {
+                var idValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                _ = long.TryParse(idValue, out var userId);
+
+                if (userId <= 0) return Unauthorized(new { message = "Unauthorized" });
+
+                await _authService.ChangePasswordAsync(userId, dto);
+                DeleteRefreshCookie();
+                return NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = AppRoles.Admin)]
+        [HttpGet("users")]
+        public async Task<IActionResult> GetUsers()
+        {
+            var users = await _authService.GetUsersAsync();
+            return Ok(users);
+        }
+
+        [Authorize(Roles = AppRoles.Admin)]
+        [HttpPut("users/{id:long}/role")]
+        public async Task<IActionResult> UpdateUserRole(long id, [FromBody] AuthUpdateRoleRequestDto dto)
+        {
+            try
+            {
+                var updated = await _authService.UpdateUserRoleAsync(id, dto.Role);
+                if (updated == null) return NotFound(new { message = "User not found" });
+
+                return Ok(updated);
             }
             catch (ArgumentException ex)
             {

@@ -80,6 +80,7 @@ namespace BE_HQTCSDL.Repositories
                     ProductType = p.ProductType,
                     Price = p.Price,
                     Stock = p.Inventory != null ? p.Inventory.Quantity : 0,
+                    ReservedStock = p.Inventory != null ? p.Inventory.ReservedQuantity : 0,
                     IsActiveValue = p.IsActive,
                     Thumbnail = p.Thumbnail,
                     UpdatedAt = p.UpdatedAt
@@ -94,6 +95,8 @@ namespace BE_HQTCSDL.Repositories
                 ProductType = p.ProductType,
                 Price = p.Price,
                 Stock = p.Stock,
+                ReservedStock = p.ReservedStock,
+                AvailableStock = p.Stock - p.ReservedStock,
                 IsActive = p.IsActiveValue == 1,
                 Thumbnail = p.Thumbnail,
                 UpdatedAt = p.UpdatedAt

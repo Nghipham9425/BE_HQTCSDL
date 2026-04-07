@@ -16,9 +16,11 @@ namespace BE_HQTCSDL.Repositories.Interfaces
 		Task<long> CreateOrderAsync(Order order, List<OrderDetail> details, Payment payment);
 		Task<List<Order>> GetOrdersByCustomerAsync(long customerId);
 		Task<Order?> GetOrderByIdAsync(long customerId, long orderId);
+		Task<bool> CancelOrderByCustomerAsync(long customerId, long orderId);
 		Task<(int Total, List<Order> Items)> GetOrdersPagedForAdminAsync(string? q, string? status, int page, int pageSize);
 		Task<Order?> GetOrderByIdForAdminAsync(long orderId);
 		Task<bool> UpdateOrderStatusAsync(long orderId, string status);
+		Task<bool> ConfirmPaymentByOrderIdAsync(long orderId, long amount, string? transactionId, DateTime paidAtUtc);
 	}
 }
 

@@ -50,6 +50,67 @@ namespace BE_HQTCSDL.Services
 
         public Task<bool> DeleteAsync(long id) => _repo.DeleteAsync(id);
 
+        public async Task<VoucherPreviewResponseDto> PreviewDiscountAsync(long amount, string voucherCode)
+        {
+            if (amount <= 0) throw new ArgumentException("Order amount must be greater than 0");
+            if (string.IsNullOrWhiteSpace(voucherCode)) throw new ArgumentException("Voucher code is required");
+
+            var normalizedCode = voucherCode.Trim().ToUpper();
+            var now = DateTime.Now;
+
+            var voucher = await _db.Vouchers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(v =>
+                    v.Code == normalizedCode &&
+                    v.IsActive == 1 &&
+                    v.StartDate <= now &&
+                    v.EndDate >= now);
+
+            if (voucher == null) throw new ArgumentException("Voucher không hợp lệ hoặc đã hết hạn");
+
+            if (amount < voucher.MinOrderValue)
+            {
+                throw new ArgumentException("Đơn hàng chưa đạt giá trị tối thiểu để áp dụng voucher");
+            }
+
+            if (voucher.UsageLimit.HasValue)
+            {
+                var usedCount = await _db.Orders.CountAsync(o => o.VoucherId == voucher.Id);
+                if (usedCount >= voucher.UsageLimit.Value)
+                {
+                    throw new ArgumentException("Voucher đã hết lượt sử dụng");
+                }
+            }
+
+            long discount;
+            if (voucher.DiscountType == "PERCENT")
+            {
+                discount = amount * voucher.DiscountValue / 100;
+                if (voucher.MaxDiscount.HasValue && discount > voucher.MaxDiscount.Value)
+                {
+                    discount = voucher.MaxDiscount.Value;
+                }
+            }
+            else if (voucher.DiscountType == "FIXED")
+            {
+                discount = voucher.DiscountValue;
+            }
+            else
+            {
+                throw new ArgumentException("Loại giảm giá voucher không được hỗ trợ");
+            }
+
+            if (discount > amount) discount = amount;
+
+            return new VoucherPreviewResponseDto
+            {
+                OriginalAmount = amount,
+                Discount = discount,
+                DiscountedAmount = amount - discount,
+                VoucherCode = normalizedCode
+            };
+        }
+
         private async Task ValidateAsync(VoucherUpsertDto dto, long? voucherId)
         {
             if (string.IsNullOrWhiteSpace(dto.Code)) throw new ArgumentException("Code is required");

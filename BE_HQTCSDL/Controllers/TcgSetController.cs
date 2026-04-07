@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -41,7 +42,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPost("tcg-sets")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Create([FromBody] TcgSetUpsertDto dto)
         {
             try
@@ -56,7 +57,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPut("tcg-sets/{setId}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Update(string setId, [FromBody] TcgSetUpsertDto dto)
         {
             try
@@ -72,7 +73,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpDelete("tcg-sets/{setId}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Delete(string setId)
         {
             try

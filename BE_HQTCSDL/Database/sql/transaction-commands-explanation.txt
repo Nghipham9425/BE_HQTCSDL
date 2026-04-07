@@ -1,0 +1,365 @@
+# Các câu lệnh SQL có Transaction trong file .sql
+
+## 1. Procedure SP_UPDATE_ORDER_STATUS
+**Mục đích:** Cập nhật trạng thái đơn hàng và xử lý tồn kho tương ứng.
+
+**Câu lệnh đầy đủ:**
+```sql
+CREATE OR REPLACE EDITIONABLE PROCEDURE "CARDGAME"."SP_UPDATE_ORDER_STATUS" (
+    p_order_id      IN  NUMBER,
+    p_new_status    IN  VARCHAR2,
+    p_success       OUT NUMBER,
+    p_error_message OUT VARCHAR2
+)
+AS
+    v_current_status VARCHAR2(20);
+BEGIN
+    p_success := 0;
+    p_error_message := NULL;
+
+    -- Get current status
+    BEGIN
+        SELECT "ORDER_STATUS" INTO v_current_status
+        FROM "CARDGAME"."ORDERS"
+        WHERE "ID" = p_order_id;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            p_error_message := 'Order not found';
+            RETURN;
+    END;
+
+    -- Cannot update completed/cancelled order
+    IF v_current_status IN ('DONE', 'CANCELLED') THEN
+        p_error_message := 'Cannot update completed/cancelled order';
+        RETURN;
+    END IF;
+
+    -- Handle CANCELLED: Release reserved quantity back to available
+    IF UPPER(p_new_status) = 'CANCELLED' THEN
+        FOR detail IN (
+            SELECT "PRODUCT_ID", "QUANTITY"
+            FROM "CARDGAME"."ORDER_DETAILS"
+            WHERE "ORDER_ID" = p_order_id
+        ) LOOP
+            UPDATE "CARDGAME"."INVENTORY"
+            SET "RESERVED_QUANTITY" = "RESERVED_QUANTITY" - detail."QUANTITY"
+            WHERE "PRODUCT_ID" = detail."PRODUCT_ID";
+        END LOOP;
+    END IF;
+
+    -- Handle DONE: Deduct from both Quantity and ReservedQuantity
+    IF UPPER(p_new_status) = 'DONE' THEN
+        FOR detail IN (
+            SELECT "PRODUCT_ID", "QUANTITY"
+            FROM "CARDGAME"."ORDER_DETAILS"
+            WHERE "ORDER_ID" = p_order_id
+        ) LOOP
+            UPDATE "CARDGAME"."INVENTORY"
+            SET "QUANTITY" = "QUANTITY" - detail."QUANTITY",
+                "RESERVED_QUANTITY" = "RESERVED_QUANTITY" - detail."QUANTITY"
+            WHERE "PRODUCT_ID" = detail."PRODUCT_ID";
+        END LOOP;
+
+        -- Update payment status
+        UPDATE "CARDGAME"."PAYMENTS"
+        SET "STATUS" = 'PAID', "PAID_AT" = SYSDATE
+        WHERE "ORDER_ID" = p_order_id;
+    END IF;
+
+    -- Update order status
+    UPDATE "CARDGAME"."ORDERS"
+    SET "ORDER_STATUS" = UPPER(p_new_status)
+    WHERE "ID" = p_order_id;
+
+    COMMIT;
+    p_success := 1;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        p_error_message := SQLERRM;
+END;
+```
+
+**Giải thích:**
+- Sử dụng `COMMIT` để lưu thay đổi khi thành công.
+- Sử dụng `ROLLBACK` trong EXCEPTION để hủy bỏ nếu có lỗi.
+- Đảm bảo tính toàn vẹn dữ liệu khi cập nhật trạng thái đơn hàng và tồn kho.
+
+## 2. Procedure SP_ADJUST_INVENTORY
+**Mục đích:** Điều chỉnh số lượng tồn kho của sản phẩm.
+
+**Câu lệnh đầy đủ:**
+```sql
+CREATE OR REPLACE EDITIONABLE PROCEDURE "CARDGAME"."SP_ADJUST_INVENTORY" (
+    p_product_id    IN  NUMBER,
+    p_adjustment    IN  NUMBER,
+    p_success       OUT NUMBER,
+    p_error_message OUT VARCHAR2
+)
+AS
+    v_current_qty NUMBER;
+    v_new_qty NUMBER;
+BEGIN
+    p_success := 0;
+    p_error_message := NULL;
+
+    BEGIN
+        SELECT "QUANTITY" INTO v_current_qty
+        FROM "CARDGAME"."INVENTORY"
+        WHERE "PRODUCT_ID" = p_product_id
+        FOR UPDATE;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            p_error_message := 'Inventory not found for product ' || p_product_id;
+            RETURN;
+    END;
+
+    v_new_qty := v_current_qty + p_adjustment;
+
+    IF v_new_qty < 0 THEN
+        p_error_message := 'Cannot reduce below 0';
+        RETURN;
+    END IF;
+
+    UPDATE "CARDGAME"."INVENTORY"
+    SET "QUANTITY" = v_new_qty, "UPDATED_AT" = SYSDATE
+    WHERE "PRODUCT_ID" = p_product_id;
+
+    COMMIT;
+    p_success := 1;
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        p_error_message := SQLERRM;
+END;
+```
+
+**Giải thích:**
+- Sử dụng `FOR UPDATE` để khóa dòng inventory.
+- `COMMIT` khi cập nhật thành công.
+- `ROLLBACK` nếu có lỗi, đảm bảo không thay đổi tồn kho sai.
+
+## 3. Procedure SP_PLACE_ORDER (bắt đầu nhưng không hoàn chỉnh trong file)
+**Mục đích:** Đặt hàng với nhiều sản phẩm.
+
+**Câu lệnh đầy đủ (phần đầu):**
+```sql
+CREATE OR REPLACE EDITIONABLE PROCEDURE "CARDGAME"."SP_PLACE_ORDER" (
+    p_customer_id       IN  NUMBER,
+    p_shipping_address  IN  NVARCHAR2,
+    p_phone_number      IN  VARCHAR2,
+    p_order_email       IN  VARCHAR2         DEFAULT NULL,
+    p_note              IN  NVARCHAR2        DEFAULT NULL,
+    p_voucher_code      IN  VARCHAR2         DEFAULT NULL,
+    p_payment_method_id IN  NUMBER           DEFAULT NULL,
+    p_items             IN  SYS.ODCIVARCHAR2LIST,
+    p_order_id          OUT NUMBER,
+    p_error_message     OUT VARCHAR2
+)
+AS
+    -- Item parsing
+    v_item_parts    VARCHAR2(100);
+    v_colon_pos     NUMBER;
+    v_product_id    NUMBER;
+    v_quantity      NUMBER;
+
+    -- Product / inventory
+    v_unit_price      NUMBER;
+    v_available_stock NUMBER;
+
+    -- Order totals
+    v_sub_total   NUMBER := 0;
+    v_discount    NUMBER := 0;
+
+    -- Lookup IDs
+    v_voucher_id      NUMBER := NULL;
+    v_payment_method  NUMBER;
+
+    -- Voucher detail
+    v_discount_type  VARCHAR2(20);
+    v_discount_value NUMBER;
+    v_max_discount   NUMBER;
+    v_min_order      NUMBER;
+BEGIN
+    p_error_message := NULL;
+    p_order_id      := NULL;
+
+    -- 1. Validate customer
+    DECLARE
+        v_exists NUMBER;
+    BEGIN
+        SELECT COUNT(*) INTO v_exists FROM "CARDGAME"."USERS" WHERE "ID" = p_customer_id;
+        IF v_exists = 0 THEN
+            p_error_message := 'Customer not found: ' || p_customer_id;
+            RETURN;
+        END IF;
+    END;
+```
+
+**Giải thích:**
+- Đây là procedure đặt hàng phức tạp hơn, nhưng trong file chỉ có phần đầu.
+- Sẽ có `COMMIT` và `ROLLBACK` trong phần sau nếu hoàn chỉnh.
+
+## 4. Các Trigger có Transaction (không trực tiếp COMMIT/ROLLBACK nhưng chạy trong transaction)
+- **TRG_PAYMENTS_CONFIRM_ORDER:** Cập nhật trạng thái đơn hàng dựa trên thanh toán.
+- **TRG_PAYMENTS_SET_PAID_AT:** Đặt thời gian thanh toán.
+- Các trigger này chạy trong transaction của câu lệnh INSERT/UPDATE trên PAYMENTS.
+
+**Lưu ý:** File .sql này là schema dump, không phải file transaction procedures chuyên biệt. Các procedure chính có transaction là SP_UPDATE_ORDER_STATUS và SP_ADJUST_INVENTORY.
+
+## 4.3.5. Minh họa vấn đề xử lý đồng thời
+
+### Mục tiêu
+- Chỉ ra cơ chế xử lý đồng thời đã được áp dụng trong script hiện tại.
+- Chứng minh hệ thống sử dụng khóa dòng để tránh cập nhật chồng lấp.
+
+### Bằng chứng từ file export .sql
+Trong procedure `SP_ADJUST_INVENTORY`, hệ thống khóa dòng tồn kho bằng `FOR UPDATE` trước khi cập nhật:
+
+```sql
+SELECT "QUANTITY" INTO v_current_qty
+FROM "CARDGAME"."INVENTORY"
+WHERE "PRODUCT_ID" = p_product_id
+FOR UPDATE;
+```
+
+Sau đó mới thực hiện cập nhật và `COMMIT`, nếu lỗi thì `ROLLBACK`.
+
+```sql
+UPDATE "CARDGAME"."INVENTORY"
+SET "QUANTITY" = v_new_qty, "UPDATED_AT" = SYSDATE
+WHERE "PRODUCT_ID" = p_product_id;
+
+COMMIT;
+...
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+```
+
+### Ý nghĩa xử lý đồng thời
+- `FOR UPDATE` đảm bảo tại một thời điểm chỉ một transaction được chỉnh dòng tồn kho của cùng sản phẩm.
+- Tránh hiện tượng lost update khi nhiều phiên cùng trừ/cộng kho.
+- Mẫu `COMMIT/ROLLBACK` giúp duy trì tính nhất quán khi có lỗi phát sinh.
+
+### Kết luận mục 4.3.5
+- Hệ thống đã có cơ chế xử lý đồng thời ở mức transaction cho nghiệp vụ tồn kho.
+- Phần minh họa trong báo cáo bám đúng logic thực tế đang có trong procedure của file export.
+
+## 4.3.6. Thiết kế chính sách kiểm toán (Database Auditing)
+
+### Mục tiêu
+- Theo dõi ai đã thay đổi dữ liệu quan trọng.
+- Truy vết thời điểm, thao tác, giá trị cũ/mới.
+
+### Hiện trạng đúng theo file export .sql
+Script hiện tại đã có đầy đủ lệnh Native Unified Auditing:
+
+```sql
+CREATE AUDIT POLICY cg_audit_orders_payments
+    ACTIONS UPDATE ON "CARDGAME"."ORDERS",
+            INSERT ON "CARDGAME"."PAYMENTS",
+            UPDATE ON "CARDGAME"."PAYMENTS";
+
+AUDIT POLICY cg_audit_orders_payments;
+
+CREATE AUDIT POLICY cg_audit_inventory
+    ACTIONS UPDATE ON "CARDGAME"."INVENTORY";
+
+AUDIT POLICY cg_audit_inventory;
+```
+
+Ngoài ra script có xử lý ngoại lệ:
+- Bỏ qua khi policy đã tồn tại (`ORA-46377`).
+- Bỏ qua khi tài khoản thiếu quyền (`ORA-01031`) để script không dừng toàn bộ.
+
+### Câu lệnh chạy/duy trì chính sách audit
+
+```sql
+CREATE AUDIT POLICY cg_audit_orders_payments
+    ACTIONS UPDATE ON "CARDGAME"."ORDERS",
+            INSERT ON "CARDGAME"."PAYMENTS",
+            UPDATE ON "CARDGAME"."PAYMENTS";
+
+AUDIT POLICY cg_audit_orders_payments;
+
+CREATE AUDIT POLICY cg_audit_inventory
+    ACTIONS UPDATE ON "CARDGAME"."INVENTORY";
+
+AUDIT POLICY cg_audit_inventory;
+```
+
+### Truy van log audit native
+```sql
+SELECT
+    EVENT_TIMESTAMP,
+    DBUSERNAME,
+    ACTION_NAME,
+    OBJECT_SCHEMA,
+    OBJECT_NAME,
+    UNIFIED_AUDIT_POLICIES,
+    SQL_TEXT,
+    RETURN_CODE
+FROM UNIFIED_AUDIT_TRAIL
+WHERE OBJECT_SCHEMA = 'CARDGAME'
+  AND OBJECT_NAME IN ('ORDERS', 'PAYMENTS', 'INVENTORY')
+ORDER BY EVENT_TIMESTAMP DESC;
+```
+
+### Tắt audit (khi cần)
+```sql
+NOAUDIT POLICY cg_audit_orders_payments;
+NOAUDIT POLICY cg_audit_inventory;
+
+DROP AUDIT POLICY cg_audit_orders_payments;
+DROP AUDIT POLICY cg_audit_inventory;
+```
+
+### Kết luận mục 4.3.6
+- Native Unified Auditing đã được định nghĩa trong script export hiện tại.
+- Việc thực thi thành công toàn bộ phụ thuộc quyền DBA/audit admin của tài khoản chạy script.
+- Cần ghi trong báo cáo: RBAC có thể chạy bằng schema owner, còn phần audit policy nên chạy bằng tài khoản có đặc quyền cao hơn.
+
+## 4.3.7. Thiết kế và cài đặt mô hình phân quyền của hệ thống
+
+### Mục tiêu
+- Tách quyền theo vai trò nghiệp vụ.
+- Giảm rủi ro truy cập trái phép vào bảng nhạy cảm.
+
+### Hiện trạng đúng theo file export .sql
+Script hiện tại đã có đầy đủ phần phân quyền ở mức DB role:
+- Tạo role: `CG_APP_USER`, `CG_ORDER_MANAGER`, `CG_INVENTORY_MANAGER`, `CG_ADMIN`.
+- Cấp quyền chi tiết theo từng role bằng `GRANT` thông qua `SP_SAFE_GRANT`.
+- Có mẫu gán role cho DB user ở mục optional assignment.
+
+Đồng thời hệ thống vẫn có phân quyền nghiệp vụ ở tầng dữ liệu thông qua cột `USERS.ROLE`:
+```sql
+CHECK ("ROLE" IN ('USER', 'ADMIN', 'ORDER_MANAGER', 'INVENTORY_MANAGER'))
+```
+
+### Lệnh phân quyền chính trong script
+
+```sql
+CREATE ROLE CG_APP_USER;
+CREATE ROLE CG_ORDER_MANAGER;
+CREATE ROLE CG_INVENTORY_MANAGER;
+CREATE ROLE CG_ADMIN;
+
+GRANT SELECT ON "CARDGAME"."PRODUCTS" TO CG_APP_USER;
+GRANT SELECT, UPDATE ON "CARDGAME"."ORDERS" TO CG_ORDER_MANAGER;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "CARDGAME"."INVENTORY" TO CG_INVENTORY_MANAGER;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "CARDGAME"."USERS" TO CG_ADMIN;
+```
+
+Mẫu gán role cho user DB:
+
+```sql
+GRANT CG_APP_USER TO CARDGAME_APP;
+GRANT CG_ORDER_MANAGER TO CARDGAME_ORDER;
+GRANT CG_INVENTORY_MANAGER TO CARDGAME_WAREHOUSE;
+GRANT CG_ADMIN TO CARDGAME_ADMIN;
+```
+
+### Kết luận mục 4.3.7
+- Mô hình phân quyền hiện tại đã gồm 2 lớp: DB role (Oracle) và role nghiệp vụ (`USERS.ROLE`).
+- Cách triển khai này phù hợp cho cả kiểm soát truy cập ở DB và kiểm soát chức năng ở tầng ứng dụng.

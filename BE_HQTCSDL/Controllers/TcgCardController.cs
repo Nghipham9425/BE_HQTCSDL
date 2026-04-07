@@ -1,5 +1,6 @@
 using BE_HQTCSDL.Services.Interfaces;
 using BE_HQTCSDL.Dtos;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -39,7 +40,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPost("tcg-cards")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Create([FromBody] TcgCardUpsertDto dto)
         {
             try
@@ -54,7 +55,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPut("tcg-cards/{cardId}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Update(string cardId, [FromBody] TcgCardUpsertDto dto)
         {
             try
@@ -70,7 +71,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpDelete("tcg-cards/{cardId}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Delete(string cardId)
         {
             var success = await _service.DeleteAsync(cardId);

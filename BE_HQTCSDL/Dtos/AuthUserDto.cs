@@ -1,3 +1,5 @@
+using BE_HQTCSDL.Utils;
+
 namespace BE_HQTCSDL.Dtos
 {
     public class AuthUserDto
@@ -9,6 +11,6 @@ namespace BE_HQTCSDL.Dtos
         public string? Phone { get; set; }
         public string? Country { get; set; }
 
-        public string Role { get; set; } = "USER";
+        public string Role { get; set; } = AppRoles.User;
     }
 }

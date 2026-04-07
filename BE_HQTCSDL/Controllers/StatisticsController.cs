@@ -1,6 +1,7 @@
 using System.Data;
 using BE_HQTCSDL.Database;
 using BE_HQTCSDL.Dtos;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ namespace BE_HQTCSDL.Controllers
 {
     [ApiController]
     [Route("api/admin/statistics")]
-    [Authorize(Roles = "ADMIN")]
+    [Authorize(Roles = AppRoles.Admin)]
     public class StatisticsController : ControllerBase
     {
         private readonly ApplicationDbContext _db;

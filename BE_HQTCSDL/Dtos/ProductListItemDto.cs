@@ -10,6 +10,8 @@ namespace BE_HQTCSDL.Dtos
         public string ProductType { get; set; } = "NORMAL";
         public long? Price { get; set; }
         public int Stock { get; set; }
+        public int ReservedStock { get; set; }
+        public int AvailableStock { get; set; }
         public bool IsActive { get; set; }
         public string? Thumbnail { get; set; }
         public DateTime UpdatedAt { get; set; }

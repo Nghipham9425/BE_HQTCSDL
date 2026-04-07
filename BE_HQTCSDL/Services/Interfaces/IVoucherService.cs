@@ -10,5 +10,6 @@ namespace BE_HQTCSDL.Services.Interfaces
         Task<VoucherDetailDto> CreateAsync(VoucherUpsertDto dto);
         Task<VoucherDetailDto?> UpdateAsync(long id, VoucherUpsertDto dto);
         Task<bool> DeleteAsync(long id);
+        Task<VoucherPreviewResponseDto> PreviewDiscountAsync(long amount, string voucherCode);
     }
 }

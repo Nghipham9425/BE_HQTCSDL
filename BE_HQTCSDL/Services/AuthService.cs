@@ -10,6 +10,7 @@ using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Models;
 using BE_HQTCSDL.Repositories.Interfaces;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.IdentityModel.Tokens;
 
 namespace BE_HQTCSDL.Services
@@ -40,13 +41,19 @@ namespace BE_HQTCSDL.Services
 				Email = email,
 				Password = BCrypt.Net.BCrypt.HashPassword(dto.Password),
 				FullName = fullName,
-				Role = "USER",
+				Role = AppRoles.User,
 				CreatedAt = DateTime.UtcNow
 			};
 
 			await _repo.CreateUserAsync(user);
 
 			return await IssueSessionAsync(user);
+		}
+
+		public async Task<List<AuthUserDto>> GetUsersAsync()
+		{
+			var users = await _repo.GetUsersAsync();
+			return users.Select(MapAuthUser).ToList();
 		}
 
 		public async Task<AuthTokenResponseDto> LoginAsync(AuthLoginRequestDto dto)
@@ -101,6 +108,51 @@ namespace BE_HQTCSDL.Services
 			return BuildTokenResponse(tokenRow.User, newTokenValue);
 		}
 
+		public async Task ChangePasswordAsync(long userId, AuthChangePasswordRequestDto dto)
+		{
+			if (userId <= 0) throw new ArgumentException("Invalid user id");
+			if (dto == null) throw new ArgumentException("Payload is required");
+
+			var currentPassword = dto.CurrentPassword ?? string.Empty;
+			var newPassword = dto.NewPassword ?? string.Empty;
+			var confirmPassword = dto.ConfirmPassword ?? string.Empty;
+
+			if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword) || string.IsNullOrWhiteSpace(confirmPassword))
+			{
+				throw new ArgumentException("Vui lòng nhập đầy đủ thông tin mật khẩu.");
+			}
+
+			if (newPassword.Length < 8)
+			{
+				throw new ArgumentException("Mật khẩu mới phải có ít nhất 8 ký tự.");
+			}
+
+			if (newPassword != confirmPassword)
+			{
+				throw new ArgumentException("Xác nhận mật khẩu chưa khớp.");
+			}
+
+			if (currentPassword == newPassword)
+			{
+				throw new ArgumentException("Mật khẩu mới phải khác mật khẩu hiện tại.");
+			}
+
+			var user = await _repo.GetUserByIdAsync(userId);
+			if (user == null) throw new ArgumentException("User not found");
+
+			var passwordValid = VerifyPassword(currentPassword, user.Password);
+			if (!passwordValid)
+			{
+				throw new ArgumentException("Mật khẩu hiện tại không đúng.");
+			}
+
+			user.Password = BCrypt.Net.BCrypt.HashPassword(newPassword);
+			await _repo.SaveChangesAsync();
+
+			// Force re-login on all devices after password change.
+			await _repo.RevokeRefreshTokensByUserIdAsync(userId);
+		}
+
 		public async Task LogoutAsync(string refreshToken)
 		{
 			if (string.IsNullOrWhiteSpace(refreshToken)) return;
@@ -143,6 +195,26 @@ namespace BE_HQTCSDL.Services
 			user.Phone = phone;
 			user.Country = country;
 
+			await _repo.SaveChangesAsync();
+
+			return MapAuthUser(user);
+		}
+
+		public async Task<AuthUserDto?> UpdateUserRoleAsync(long userId, string role)
+		{
+			if (userId <= 0) throw new ArgumentException("Invalid user id");
+			if (string.IsNullOrWhiteSpace(role)) throw new ArgumentException("Role is required");
+
+			var normalizedRole = NormalizeRole(role);
+			if (!IsValidRole(normalizedRole))
+			{
+				throw new ArgumentException("Role must be one of: USER, ADMIN, ORDER_MANAGER, INVENTORY_MANAGER");
+			}
+
+			var user = await _repo.GetUserByIdAsync(userId);
+			if (user == null) return null;
+
+			user.Role = normalizedRole;
 			await _repo.SaveChangesAsync();
 
 			return MapAuthUser(user);
@@ -231,7 +303,21 @@ namespace BE_HQTCSDL.Services
 
 		private static bool LooksLikeBcryptHash(string value)
 		{
+			if (string.IsNullOrEmpty(value)) return false;
 			return value.StartsWith("$2a$") || value.StartsWith("$2b$") || value.StartsWith("$2y$");
+		}
+
+		private static string NormalizeRole(string role)
+		{
+			return role.Trim().ToUpperInvariant();
+		}
+
+		private static bool IsValidRole(string role)
+		{
+			return role == AppRoles.User
+				|| role == AppRoles.Admin
+				|| role == AppRoles.OrderManager
+				|| role == AppRoles.InventoryManager;
 		}
 	}
 }

@@ -1,11 +1,13 @@
 using System.Threading.Tasks;
 using BE_HQTCSDL.Models;
+using System.Collections.Generic;
 
 namespace BE_HQTCSDL.Repositories.Interfaces
 {
     public interface IAuthRepository
     {
         Task<bool> EmailExistsAsync(string normalizedEmail);
+        Task<List<User>> GetUsersAsync();
         Task<User?> GetUserByIdAsync(long userId);
         Task<User?> GetUserByEmailAsync(string normalizedEmail);
         Task<RefreshToken?> GetRefreshTokenWithUserAsync(string token);
@@ -13,6 +15,7 @@ namespace BE_HQTCSDL.Repositories.Interfaces
         Task<User> CreateUserAsync(User user);
         Task<RefreshToken> CreateRefreshTokenAsync(RefreshToken refreshToken);
         Task RevokeRefreshTokenAsync(RefreshToken refreshToken);
+        Task RevokeRefreshTokensByUserIdAsync(long userId);
         Task SaveChangesAsync();
     }
 }

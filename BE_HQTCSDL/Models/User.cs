@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using BE_HQTCSDL.Utils;
 
 namespace BE_HQTCSDL.Models
 {
@@ -34,9 +35,9 @@ namespace BE_HQTCSDL.Models
         public string? Phone { get; set; }
 
         [Column("ROLE")]
-        [MaxLength(10)]
-        public string Role { get; set; } = "USER";
-        // USER | ADMIN
+        [MaxLength(30)]
+        public string Role { get; set; } = AppRoles.User;
+        // USER | ADMIN | ORDER_MANAGER | INVENTORY_MANAGER
 
         [Column("CREATED_AT")]
         public DateTime CreatedAt { get; set; } = DateTime.Now;

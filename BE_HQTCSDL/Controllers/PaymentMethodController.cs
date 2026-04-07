@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -38,7 +39,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPost("payment-methods")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.Admin)]
         public async Task<IActionResult> Create([FromBody] PaymentMethodUpsertDto dto)
         {
             try
@@ -53,7 +54,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPut("payment-methods/{id:long}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.Admin)]
         public async Task<IActionResult> Update(long id, [FromBody] PaymentMethodUpsertDto dto)
         {
             try
@@ -69,7 +70,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpDelete("payment-methods/{id:long}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.Admin)]
         public async Task<IActionResult> Delete(long id)
         {
             var success = await _service.DeleteAsync(id);

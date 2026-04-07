@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Models;
@@ -11,6 +14,8 @@ namespace BE_HQTCSDL.Services
 {
     public class OrderService : IOrderService
     {
+        private static readonly Regex OrderCodeRegex = new(@"DH\s*([0-9]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
         private static readonly HashSet<string> AllowedOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
         {
             "PENDING",
@@ -174,9 +179,10 @@ namespace BE_HQTCSDL.Services
                 }
             }
 
-            if (!string.Equals(paymentMethod.MethodName, "COD", StringComparison.OrdinalIgnoreCase))
+            var normalizedMethodName = (paymentMethod.MethodName ?? string.Empty).Trim().ToUpperInvariant();
+            if (normalizedMethodName != "COD" && normalizedMethodName != "SEPAY")
             {
-                throw new ArgumentException("Only COD payment is supported currently");
+                throw new ArgumentException("Unsupported payment method");
             }
 
             var order = new Order
@@ -239,6 +245,20 @@ namespace BE_HQTCSDL.Services
         {
             if (customerId <= 0) throw new ArgumentException("Invalid customer");
             if (orderId <= 0) throw new ArgumentException("Invalid order id");
+
+            var order = await _repo.GetOrderByIdAsync(customerId, orderId);
+            if (order == null) return null;
+
+            return ToOrderDetailDto(order);
+        }
+
+        public async Task<OrderDetailDto?> CancelMyOrderAsync(long customerId, long orderId)
+        {
+            if (customerId <= 0) throw new ArgumentException("Invalid customer");
+            if (orderId <= 0) throw new ArgumentException("Invalid order id");
+
+            var cancelled = await _repo.CancelOrderByCustomerAsync(customerId, orderId);
+            if (!cancelled) return null;
 
             var order = await _repo.GetOrderByIdAsync(customerId, orderId);
             if (order == null) return null;
@@ -311,6 +331,155 @@ namespace BE_HQTCSDL.Services
             }
 
             return await _repo.UpdateOrderStatusAsync(orderId, normalizedStatus);
+        }
+
+        public async Task<bool> ProcessSePayWebhookAsync(JsonElement payload)
+        {
+            var invoiceNumber = GetNestedString(payload, "order", "order_invoice_number")
+                ?? GetString(payload, "order_invoice_number", "invoice_number");
+
+            var transactionContent = GetString(payload,
+                "content",
+                "description",
+                "transfer_content",
+                "transaction_content");
+
+            var orderId = ExtractOrderId(invoiceNumber);
+            if (orderId <= 0)
+            {
+                orderId = ExtractOrderId(transactionContent);
+            }
+
+            if (orderId <= 0)
+            {
+                return false;
+            }
+
+            var amount = GetNestedLong(payload, "transaction", "transaction_amount");
+            if (amount <= 0)
+            {
+                amount = GetNestedLong(payload, "order", "order_amount");
+            }
+            if (amount <= 0)
+            {
+                amount = GetLong(payload,
+                "amount",
+                "transfer_amount",
+                "amount_in",
+                "transferAmount");
+            }
+
+            var transactionId = GetNestedString(payload, "transaction", "transaction_id")
+                ?? GetNestedString(payload, "transaction", "id")
+                ?? GetString(payload,
+                "transaction_id",
+                "reference_id",
+                "id",
+                "tid");
+
+            return await _repo.ConfirmPaymentByOrderIdAsync(orderId, amount, transactionId, DateTime.UtcNow);
+        }
+
+        private static long ExtractOrderId(string? content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return 0;
+
+            var match = OrderCodeRegex.Match(content);
+            if (match.Success && long.TryParse(match.Groups[1].Value, out var orderId))
+            {
+                return orderId;
+            }
+
+            return 0;
+        }
+
+        private static string? GetString(JsonElement payload, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (!payload.TryGetProperty(key, out var value)) continue;
+
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    return value.GetString();
+                }
+
+                if (value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                {
+                    return value.ToString();
+                }
+            }
+
+            return null;
+        }
+
+        private static string? GetNestedString(JsonElement payload, string parentKey, string childKey)
+        {
+            if (!payload.TryGetProperty(parentKey, out var parent) || parent.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (!parent.TryGetProperty(childKey, out var child))
+            {
+                return null;
+            }
+
+            if (child.ValueKind == JsonValueKind.String)
+            {
+                return child.GetString();
+            }
+
+            if (child.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+            {
+                return child.ToString();
+            }
+
+            return null;
+        }
+
+        private static long GetLong(JsonElement payload, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (!payload.TryGetProperty(key, out var value)) continue;
+
+                if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var n))
+                {
+                    return n;
+                }
+
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    var raw = value.GetString();
+                    if (long.TryParse(raw, out var s))
+                    {
+                        return s;
+                    }
+
+                    if (decimal.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var d1))
+                    {
+                        return Convert.ToInt64(decimal.Truncate(d1));
+                    }
+
+                    if (decimal.TryParse(raw, NumberStyles.Any, CultureInfo.CurrentCulture, out var d2))
+                    {
+                        return Convert.ToInt64(decimal.Truncate(d2));
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        private static long GetNestedLong(JsonElement payload, string parentKey, string childKey)
+        {
+            if (!payload.TryGetProperty(parentKey, out var parent) || parent.ValueKind != JsonValueKind.Object)
+            {
+                return 0;
+            }
+
+            return GetLong(parent, childKey);
         }
 
         private static OrderDetailDto ToOrderDetailDto(Order order)

@@ -4,7 +4,7 @@ namespace BE_HQTCSDL.Database.connection
 {
     public class OracleSingleton
     {
-        private static OracleConnection _connection;
+        private static OracleConnection _connection = null;
         private static readonly object _lock = new object();
 
         public static OracleConnection GetConnection()

@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,7 +20,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> GetPaged(
             [FromQuery] string? q,
             [FromQuery] int page = 1,
@@ -30,7 +31,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> GetById(long id)
         {
             var inventory = await _service.GetByIdAsync(id);
@@ -40,6 +41,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpGet("product/{productId}")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> GetByProductId(long productId)
         {
             var inventory = await _service.GetByProductIdAsync(productId);
@@ -49,7 +51,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPost("product/{productId}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> CreateOrUpdate(long productId, [FromBody] InventoryUpdateDto dto)
         {
             try
@@ -64,7 +66,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Update(long id, [FromBody] InventoryUpdateDto dto)
         {
             try
@@ -81,7 +83,7 @@ namespace BE_HQTCSDL.Controllers
         }
 
         [HttpPost("product/{productId}/adjust")]
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Adjust(long productId, [FromBody] InventoryAdjustDto dto)
         {
             var result = await _service.AdjustQuantityAsync(productId, dto.Adjustment);
