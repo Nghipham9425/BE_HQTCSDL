@@ -74,6 +74,26 @@ builder.Services.AddScoped<IWishlistService, WishlistService>();
 
 var app = builder.Build();
 
+app.Use(async (context, next) =>
+{
+    const string headerName = "X-Request-Id";
+    var incomingRequestId = context.Request.Headers[headerName].FirstOrDefault();
+    var requestId = !string.IsNullOrWhiteSpace(incomingRequestId) && incomingRequestId.Length <= 128
+        ? incomingRequestId
+        : context.TraceIdentifier;
+
+    context.TraceIdentifier = requestId;
+    context.Response.Headers[headerName] = requestId;
+
+    using (app.Logger.BeginScope(new Dictionary<string, object>
+    {
+        ["RequestId"] = requestId
+    }))
+    {
+        await next();
+    }
+});
+
 // Keep unexpected errors consistent and avoid leaking stack traces in production.
 app.UseExceptionHandler(errorApp =>
 {
@@ -85,7 +105,11 @@ app.UseExceptionHandler(errorApp =>
         await Results.Problem(
             statusCode: StatusCodes.Status500InternalServerError,
             title: "Unexpected server error",
-            detail: "An unexpected error occurred. Please try again later.").ExecuteAsync(context);
+            detail: "An unexpected error occurred. Please try again later.",
+            extensions: new Dictionary<string, object?>
+            {
+                ["requestId"] = context.TraceIdentifier
+            }).ExecuteAsync(context);
     });
 });
 
