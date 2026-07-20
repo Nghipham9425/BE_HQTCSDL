@@ -74,11 +74,33 @@ builder.Services.AddScoped<IWishlistService, WishlistService>();
 
 var app = builder.Build();
 
+// Keep unexpected errors consistent and avoid leaking stack traces in production.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+
+        await Results.Problem(
+            statusCode: StatusCodes.Status500InternalServerError,
+            title: "Unexpected server error",
+            detail: "An unexpected error occurred. Please try again later.").ExecuteAsync(context);
+    });
+});
+
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/api/v1/health", () => Results.Ok(new
+{
+    status = "ok",
+    service = "BE_HQTCSDL",
+    timestamp = DateTime.UtcNow
+}));
 
 app.MapGet("/api/v1/health/db", async (ApplicationDbContext db, CancellationToken cancellationToken) =>
 {
