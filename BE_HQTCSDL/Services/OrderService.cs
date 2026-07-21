@@ -9,6 +9,7 @@ using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Models;
 using BE_HQTCSDL.Repositories.Interfaces;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 
 namespace BE_HQTCSDL.Services
 {
@@ -268,9 +269,7 @@ namespace BE_HQTCSDL.Services
 
         public async Task<OrderPagedResponseDto> GetAdminOrdersAsync(string? q, string? status, int page, int pageSize)
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1) pageSize = 20;
-            if (pageSize > 100) pageSize = 100;
+            (page, pageSize) = Pagination.Normalize(page, pageSize);
 
             if (!string.IsNullOrWhiteSpace(status))
             {

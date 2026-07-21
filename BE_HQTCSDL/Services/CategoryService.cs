@@ -4,6 +4,7 @@ using BE_HQTCSDL.Database;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Repositories.Interfaces;
 using BE_HQTCSDL.Services.Interfaces;
+using BE_HQTCSDL.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace BE_HQTCSDL.Services
@@ -21,9 +22,7 @@ namespace BE_HQTCSDL.Services
 
         public Task<CategoryPagedResponseDto> GetPagedAsync(string? q, int page, int pageSize)
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1) pageSize = 20;
-            if (pageSize > 100) pageSize = 100;
+            (page, pageSize) = Pagination.Normalize(page, pageSize);
 
             return _repo.GetPagedAsync(q, page, pageSize);
         }
