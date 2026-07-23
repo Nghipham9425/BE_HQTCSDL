@@ -48,5 +48,8 @@ namespace BE_HQTCSDL.Models
         public ICollection<Review> Reviews { get; set; } = [];
         public ICollection<Wishlist> Wishlists { get; set; } = [];
         public ICollection<UserAddress> Addresses { get; set; } = [];
+        public ICollection<Conversation> CustomerConversations { get; set; } = [];
+        public ICollection<Conversation> AssignedConversations { get; set; } = [];
+        public ICollection<ChatMessage> ChatMessages { get; set; } = [];
     }
 }

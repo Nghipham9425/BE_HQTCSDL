@@ -58,5 +58,6 @@ namespace BE_HQTCSDL.Models
         public ICollection<OrderDetail> OrderDetails { get; set; } = [];
         public ICollection<Payment> Payments { get; set; } = [];
         public ICollection<Review> Reviews { get; set; } = [];
+        public ICollection<Conversation> SupportConversations { get; set; } = [];
     }
 }

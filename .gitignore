@@ -1,8 +1,17 @@
 .vs/
 **/bin/
 **/obj/
+*.user
+*.suo
+*.log
 
 # env files
 **/.env
 **/.env.*
 !**/.env.example
+
+# Local database and container state
+oracle-data/
+**/oracle-data/
+docker-data/
+**/docker-data/
