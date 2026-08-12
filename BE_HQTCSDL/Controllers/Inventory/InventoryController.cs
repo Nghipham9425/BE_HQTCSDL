@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Services.Interfaces;
@@ -63,6 +64,10 @@ namespace BE_HQTCSDL.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id}")]
@@ -86,10 +91,17 @@ namespace BE_HQTCSDL.Controllers
         [Authorize(Roles = AppRoles.AdminOrInventoryManager)]
         public async Task<IActionResult> Adjust(long productId, [FromBody] InventoryAdjustDto dto)
         {
-            var result = await _service.AdjustQuantityAsync(productId, dto.Adjustment);
-            if (!result) return NotFound(new { message = "Inventory not found for this product" });
+            try
+            {
+                var result = await _service.AdjustQuantityAsync(productId, dto.Adjustment);
+                if (!result) return NotFound(new { message = "Inventory not found for this product" });
 
-            return Ok(new { message = "Quantity adjusted successfully" });
+                return Ok(new { message = "Quantity adjusted successfully" });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 

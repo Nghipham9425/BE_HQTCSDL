@@ -12,7 +12,7 @@ namespace BE_HQTCSDL.Repositories.Interfaces
         Task<User?> GetUserByEmailAsync(string normalizedEmail);
         Task<RefreshToken?> GetRefreshTokenWithUserAsync(string token);
         Task<RefreshToken?> GetRefreshTokenAsync(string token);
-        Task<User> CreateUserAsync(User user);
+        Task<User> CreateUserWithRefreshTokenAsync(User user, RefreshToken refreshToken);
         Task<RefreshToken> CreateRefreshTokenAsync(RefreshToken refreshToken);
         Task RevokeRefreshTokenAsync(RefreshToken refreshToken);
         Task RevokeRefreshTokensByUserIdAsync(long userId);

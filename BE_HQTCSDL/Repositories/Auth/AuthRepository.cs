@@ -52,11 +52,27 @@ namespace BE_HQTCSDL.Repositories
             return _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == token);
         }
 
-        public async Task<User> CreateUserAsync(User user)
+        public async Task<User> CreateUserWithRefreshTokenAsync(User user, RefreshToken refreshToken)
         {
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
-            return user;
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
+            try
+            {
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+
+                refreshToken.UserId = user.Id;
+                _db.RefreshTokens.Add(refreshToken);
+                await _db.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+                return user;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<RefreshToken> CreateRefreshTokenAsync(RefreshToken refreshToken)

@@ -45,9 +45,12 @@ namespace BE_HQTCSDL.Services
 				CreatedAt = DateTime.UtcNow
 			};
 
-			await _repo.CreateUserAsync(user);
+			var refreshTokenValue = GenerateRefreshToken();
+			var refreshToken = CreateRefreshToken(refreshTokenValue);
 
-			return await IssueSessionAsync(user);
+			await _repo.CreateUserWithRefreshTokenAsync(user, refreshToken);
+
+			return BuildTokenResponse(user, refreshTokenValue);
 		}
 
 		public async Task<List<AuthUserDto>> GetUsersAsync()
@@ -224,18 +227,23 @@ namespace BE_HQTCSDL.Services
 		{
 			var refreshTokenValue = GenerateRefreshToken();
 
-			var refreshToken = new RefreshToken
-			{
-				UserId = user.Id,
-				Token = refreshTokenValue,
-				CreatedAt = DateTime.UtcNow,
-				ExpiresAt = DateTime.UtcNow.AddDays(BE_HQTCSDL.Config.Environment.RefreshTokenExpireDays),
-				IsRevoked = 0
-			};
+			var refreshToken = CreateRefreshToken(refreshTokenValue, user.Id);
 
 			await _repo.CreateRefreshTokenAsync(refreshToken);
 
 			return BuildTokenResponse(user, refreshTokenValue);
+		}
+
+		private static RefreshToken CreateRefreshToken(string token, long userId = 0)
+		{
+			return new RefreshToken
+			{
+				UserId = userId,
+				Token = token,
+				CreatedAt = DateTime.UtcNow,
+				ExpiresAt = DateTime.UtcNow.AddDays(BE_HQTCSDL.Config.Environment.RefreshTokenExpireDays),
+				IsRevoked = 0
+			};
 		}
 
 		private AuthTokenResponseDto BuildTokenResponse(User user, string refreshToken)

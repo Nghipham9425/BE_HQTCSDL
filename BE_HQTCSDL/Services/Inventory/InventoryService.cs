@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using BE_HQTCSDL.Dtos;
 using BE_HQTCSDL.Repositories.Interfaces;
@@ -35,6 +36,11 @@ namespace BE_HQTCSDL.Services
 
         public async Task<InventoryDto> CreateOrUpdateAsync(long productId, int quantity)
         {
+            if (productId <= 0)
+            {
+                throw new ArgumentException("Invalid product id");
+            }
+
             if (quantity < 0)
             {
                 throw new ArgumentException("Quantity cannot be negative");
@@ -49,6 +55,11 @@ namespace BE_HQTCSDL.Services
                     ReservedQuantity = existing.ReservedQuantity
                 });
                 return updated ?? throw new InvalidOperationException("Failed to update inventory");
+            }
+
+            if (!await _repo.ProductExistsAsync(productId))
+            {
+                throw new KeyNotFoundException("Product not found");
             }
 
             return await _repo.CreateAsync(productId, quantity);
@@ -72,9 +83,22 @@ namespace BE_HQTCSDL.Services
             return _repo.UpdateAsync(id, dto);
         }
 
-        public Task<bool> AdjustQuantityAsync(long productId, int adjustment)
+        public async Task<bool> AdjustQuantityAsync(long productId, int adjustment)
         {
-            return _repo.AdjustQuantityAsync(productId, adjustment);
+            if (productId <= 0)
+            {
+                throw new ArgumentException("Invalid product id");
+            }
+            if (adjustment == 0)
+            {
+                throw new ArgumentException("Adjustment must be different from zero");
+            }
+            if (await _repo.GetByProductIdAsync(productId) == null)
+            {
+                return false;
+            }
+
+            return await _repo.AdjustQuantityAsync(productId, adjustment);
         }
     }
 }

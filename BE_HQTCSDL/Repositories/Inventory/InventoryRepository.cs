@@ -86,6 +86,11 @@ namespace BE_HQTCSDL.Repositories
             return inventory != null ? MapToDto(inventory) : null;
         }
 
+        public Task<bool> ProductExistsAsync(long productId)
+        {
+            return _db.Products.AnyAsync(p => p.Id == productId);
+        }
+
         public async Task<InventoryDto> CreateAsync(long productId, int quantity)
         {
             // Check if inventory already exists (trigger may have created it)

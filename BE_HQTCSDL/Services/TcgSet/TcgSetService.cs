@@ -65,6 +65,13 @@ namespace BE_HQTCSDL.Services
 
             dto.SetId = dto.SetId.Trim();
             dto.Name = dto.Name.Trim();
+            dto.Series = string.IsNullOrWhiteSpace(dto.Series) ? null : dto.Series.Trim();
+            dto.LogoUrl = string.IsNullOrWhiteSpace(dto.LogoUrl) ? null : dto.LogoUrl.Trim();
+
+            if (dto.SetId.Length > 20) throw new ArgumentException("SetId cannot exceed 20 characters");
+            if (dto.Name.Length > 100) throw new ArgumentException("Name cannot exceed 100 characters");
+            if (dto.Series?.Length > 100) throw new ArgumentException("Series cannot exceed 100 characters");
+            if (dto.LogoUrl?.Length > 500) throw new ArgumentException("LogoUrl cannot exceed 500 characters");
 
             if (dto.TotalCards.HasValue && dto.TotalCards.Value < 0)
             {

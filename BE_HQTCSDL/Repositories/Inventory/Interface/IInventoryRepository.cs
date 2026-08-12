@@ -8,6 +8,7 @@ namespace BE_HQTCSDL.Repositories.Interfaces
         Task<InventoryPagedResponseDto> GetPagedAsync(string? q, int page, int pageSize);
         Task<InventoryDto?> GetByIdAsync(long id);
         Task<InventoryDto?> GetByProductIdAsync(long productId);
+        Task<bool> ProductExistsAsync(long productId);
         Task<InventoryDto> CreateAsync(long productId, int quantity);
         Task<InventoryDto?> UpdateAsync(long id, InventoryUpdateDto dto);
         Task<bool> AdjustQuantityAsync(long productId, int adjustment);
