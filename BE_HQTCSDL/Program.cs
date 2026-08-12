@@ -72,6 +72,7 @@ builder.Services.AddScoped<IUserAddressService, UserAddressService>();
 builder.Services.AddScoped<IWishlistRepository, WishlistRepository>();
 builder.Services.AddScoped<IWishlistService, WishlistService>();
 builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+builder.Services.AddScoped<IChatService, ChatService>();
 
 var app = builder.Build();
 

@@ -14,11 +14,15 @@ public sealed class ConversationRepository(ApplicationDbContext db) : IConversat
 
     public Task<Conversation?> GetOpenByCustomerAndOrderAsync(long customerId, long? orderId) =>
         db.Conversations
-            .FirstOrDefaultAsync(x => x.CustomerId == customerId && x.OrderId == orderId && x.Status == "OPEN");
+            .FirstOrDefaultAsync(x =>
+                x.CustomerId == customerId &&
+                x.OrderId == orderId &&
+                x.Status != ConversationStatuses.Closed);
 
     public Task<List<Conversation>> GetCustomerConversationsAsync(long customerId) =>
         db.Conversations
             .AsNoTracking()
+            .Include(x => x.Messages)
             .Where(x => x.CustomerId == customerId)
             .OrderByDescending(x => x.UpdatedAt)
             .ToListAsync();
@@ -26,7 +30,7 @@ public sealed class ConversationRepository(ApplicationDbContext db) : IConversat
     public Task<List<Conversation>> GetStaffConversationsAsync() =>
         db.Conversations
             .AsNoTracking()
-            .Where(x => x.Status == "OPEN")
+            .Include(x => x.Messages)
             .OrderByDescending(x => x.UpdatedAt)
             .ToListAsync();
 
@@ -40,8 +44,11 @@ public sealed class ConversationRepository(ApplicationDbContext db) : IConversat
     public Task<bool> CustomerOwnsOrderAsync(long customerId, long orderId) =>
         db.Orders.AnyAsync(x => x.Id == orderId && x.CustomerId == customerId);
 
-    public Task<bool> UserExistsAsync(long userId) =>
-        db.Users.AnyAsync(x => x.Id == userId);
+    public Task<string?> GetUserRoleAsync(long userId) =>
+        db.Users
+            .Where(x => x.Id == userId)
+            .Select(x => x.Role)
+            .FirstOrDefaultAsync();
 
     public Task AddConversationAsync(Conversation conversation) =>
         db.Conversations.AddAsync(conversation).AsTask();
@@ -51,7 +58,10 @@ public sealed class ConversationRepository(ApplicationDbContext db) : IConversat
 
     public Task MarkMessagesAsReadAsync(long conversationId, long readerId) =>
         db.ChatMessages
-            .Where(x => x.ConversationId == conversationId && x.SenderId != readerId && !x.IsRead)
+            .Where(x =>
+                x.ConversationId == conversationId &&
+                (x.SenderId == null || x.SenderId != readerId) &&
+                !x.IsRead)
             .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.IsRead, true));
 
     public Task SaveChangesAsync() => db.SaveChangesAsync();

@@ -14,7 +14,12 @@ public class ChatMessage
     public long ConversationId { get; set; }
 
     [Column("SENDER_ID")]
-    public long SenderId { get; set; }
+    public long? SenderId { get; set; }
+
+    [Required]
+    [Column("SENDER_TYPE")]
+    [MaxLength(20)]
+    public string SenderType { get; set; } = ChatSenderTypes.Customer;
 
     [Required]
     [Column("CONTENT")]
@@ -28,5 +33,5 @@ public class ChatMessage
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Conversation Conversation { get; set; } = null!;
-    public User Sender { get; set; } = null!;
+    public User? Sender { get; set; }
 }

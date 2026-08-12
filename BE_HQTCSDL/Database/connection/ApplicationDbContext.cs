@@ -54,9 +54,20 @@ namespace BE_HQTCSDL.Database
 
             modelBuilder.Entity<Conversation>(entity =>
             {
+                entity.ToTable("CONVERSATIONS", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_CONVERSATIONS_STATUS",
+                        "\"STATUS\" IN ('AI_ACTIVE', 'WAITING_STAFF', 'STAFF_ACTIVE', 'CLOSED')");
+                    table.HasCheckConstraint(
+                        "CK_CONVERSATIONS_TYPE",
+                        "\"TYPE\" IN ('GENERAL_SUPPORT', 'ORDER_SUPPORT')");
+                });
+
                 entity.HasIndex(x => x.CustomerId);
                 entity.HasIndex(x => x.OrderId);
                 entity.HasIndex(x => x.UpdatedAt);
+                entity.HasIndex(x => x.Status);
 
                 entity.HasOne(x => x.Customer)
                     .WithMany(x => x.CustomerConversations)
@@ -76,7 +87,19 @@ namespace BE_HQTCSDL.Database
 
             modelBuilder.Entity<ChatMessage>(entity =>
             {
+                entity.ToTable("CHAT_MESSAGES", table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_CHAT_MESSAGES_SENDER_TYPE",
+                        "\"SENDER_TYPE\" IN ('CUSTOMER', 'STAFF', 'AI', 'SYSTEM')");
+                    table.HasCheckConstraint(
+                        "CK_CHAT_MESSAGES_SENDER_ID",
+                        "((\"SENDER_TYPE\" IN ('CUSTOMER', 'STAFF') AND \"SENDER_ID\" IS NOT NULL) OR " +
+                        "(\"SENDER_TYPE\" IN ('AI', 'SYSTEM') AND \"SENDER_ID\" IS NULL))");
+                });
+
                 entity.HasIndex(x => x.ConversationId);
+                entity.HasIndex(x => new { x.ConversationId, x.CreatedAt });
 
                 entity.HasOne(x => x.Conversation)
                     .WithMany(x => x.Messages)

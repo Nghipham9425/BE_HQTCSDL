@@ -4,6 +4,7 @@ namespace BE_HQTCSDL.Dtos;
 
 public sealed class CreateConversationRequest
 {
+    [Required]
     [MaxLength(30)]
     public string Type { get; set; } = "GENERAL_SUPPORT";
 
@@ -39,7 +40,8 @@ public sealed class ChatMessageResponse
 {
     public long Id { get; set; }
     public long ConversationId { get; set; }
-    public long SenderId { get; set; }
+    public long? SenderId { get; set; }
+    public string SenderType { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public bool IsRead { get; set; }
     public DateTime CreatedAt { get; set; }

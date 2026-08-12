@@ -27,7 +27,7 @@ public class Conversation
     [Required]
     [Column("STATUS")]
     [MaxLength(20)]
-    public string Status { get; set; } = "OPEN";
+    public string Status { get; set; } = ConversationStatuses.AiActive;
 
     [Column("CREATED_AT")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
