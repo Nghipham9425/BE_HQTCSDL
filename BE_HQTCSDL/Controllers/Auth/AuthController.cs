@@ -174,7 +174,7 @@ namespace BE_HQTCSDL.Controllers
                 Secure = HttpContext.Request.IsHttps,
                 SameSite = SameSiteMode.Lax,
                 Path = "/api/v1/auth",
-                Expires = DateTimeOffset.UtcNow.AddDays(BE_HQTCSDL.Config.Environment.RefreshTokenExpireDays)
+                Expires = DateTimeOffset.UtcNow.AddDays(Config.Environment.RefreshTokenExpireDays)
             });
         }
 
